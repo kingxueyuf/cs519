@@ -1,0 +1,70 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1187\cocoasubrtf370
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural
+
+\f0\fs24 \cf0 \
+//\
+// TMP102 Temperature Reader\
+// Uses i2c on pins 8, 9\
+//\
+class TemperatureReader \{\
+    i2c = null;\
+    \
+    // Constructor\
+    constructor() \{\
+        hardware.i2c89.configure(CLOCK_SPEED_100_KHZ);\
+        i2c = hardware.i2c89;\
+    \}\
+    \
+    function readData() \{\
+        // Start conversion\
+        i2c.write(0x90, "");\
+        i2c.write(0x90, "0");\
+ \
+        // Wait for conversion to finish\
+        imp.sleep(0.05);\
+ \
+        // Read msb and lsb\
+        local a = i2c.read(0x90, "\\x00", 2);\
+        \
+        if (a == null)\{\
+            return 999; // Dang...\
+        \}\
+        \
+        // Calculate no of steps. Each step is 0.0625 degrees centigrades.\
+        local temp = ((((a[0] & 0x7f) << 8) + a[1]) >> 4) * 0.0625;\
+        \
+        // Is negative value?\
+        if (a[0] & 0x80) \{\
+            temp *= -1;\
+        \}\
+        return temp;\
+    \}\
+\}\
+\
+//-----------------------------------------------------------------------------------------\
+// imp.configure("TMP102 Sensors", [], []);\
+\
+// My TMP102 uses i2c on pins 8, 9\
+// it has the ADD pin tied to VCC, so that its 7bit address is 1001001 = 0x49\
+local mysensor = TemperatureReader();\
+local counter = 0;\
+\
+function bigLoop() \{ \
+    counter = counter +1;\
+    // local datestr = mysensor.get_date_string();\
+    local temp = mysensor.readData();\
+    local batt_volt = hardware.voltage(); // voltage at the power input of the imp\
+\
+    // server.log( counter + " TMP102: " + temp + " C at " + datestr + ", Supply voltage: " + batt_volt +"V." );\
+    server.log("temp " +temp);\
+    \
+    // server.show(temp + " C");\
+\
+    imp.wakeup(5, bigLoop); // sleep for 10 seconds\
+\}\
+\
+bigLoop();\
+}
