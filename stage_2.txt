@@ -1,0 +1,21 @@
+hardware.uart12.configure(9600, 8, PARITY_NONE, 1, NO_RX);
+
+Message             <- "Simplest test";
+
+function clear()
+{
+    hardware.uart12.write(254);
+    hardware.uart12.write(0x01);
+    hardware.uart12.write(254);
+    hardware.uart12.write(128);
+}
+
+function writeMessage(LCDMessage)
+{
+    hardware.uart12.write(LCDMessage);
+}
+
+
+//Setup Activities - only executed once
+clear(); 
+writeMessage(Message);
