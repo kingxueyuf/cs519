@@ -1,0 +1,78 @@
+hardware.i2c12.configure(CLOCK_SPEED_400_KHZ);
+
+function readPressureInchesGH() {
+  local a = (0x5d << 1);
+  local press = hardware.i2c12.read(a, "\xa8", 3);
+  local pressure = (press[2] << 16) + (press[1] << 8) + (press[0]);
+  //2's compliment if the number is negative
+  if (0x800000 & pressure) pressure = -(0x1000000-pressure);
+  pressure = pressure/138706.5;
+  return pressure;
+}
+
+// converts pressure in mbar to altitude in meters, using 1976 US
+// Standard Atmosphere model (note that this formula only applies to a
+// height of 11 km, or about 36000 ft)
+//  If altimeter setting (QNH, barometric pressure adjusted to sea
+//  level) is given, this function returns an indicated altitude
+//  compensated for actual regional pressure; otherwise, it returns
+//  the pressure altitude above the standard pressure level of 1013.25
+//  mbar or 29.9213 inHg
+function pressureToAltitudeFeet(pressureA, stanPres) {
+  local a = math.pow(pressureA/stanPres, 0.190263);
+  local altitude = (1 - a) * 145442;
+  return altitude;
+}
+
+function readTandH(){
+    hardware.i2c89.configure(CLOCK_SPEED_400_KHZ);
+    local alsAddr = 0x40;
+    hardware.i2c89.write(alsAddr<<1,"\xf3");
+    imp.sleep(0.5);
+    local a = hardware.i2c89.read(alsAddr<<1, "", 3);
+    hardware.i2c89.write(alsAddr<<1,"\xf5");
+    imp.sleep(0.5);
+    local b = hardware.i2c89.read(alsAddr<<1, "", 3);
+    local temp = ((a[0] <<8) + (a[1] & 0xfc)) * 1.0;
+    local hum = ((b[0] <<8) + (b[1] & 0xf0)) * 1.0;
+    local newTemp = (-46.85 + (175.72 * (temp/65536.00)));
+    local newHum = -6 + (125 * (hum/65536.00));
+    newTemp = newTemp * 1.8 + 32;
+    server.log("Temp: " + newTemp);
+    server.log("Hum: " + newHum);
+    local th = newTemp+"_"+newHum;
+    agent.send("th",th);
+}
+
+//function to read pressure, altitude, temp
+function readPAT() {
+  local a = (0x5d << 1);
+  //turn sensor on
+  hardware.i2c12.write(a,"\x20\xe0");
+  //wait .5 seconds
+  imp.sleep(0.5);
+  //do work of getting pressure
+  local pressureA = readPressureInchesGH();
+  //do work of getting altitude
+  local altitude = pressureToAltitudeFeet(pressureA, 29.9213);
+  //turn sensor off
+  hardware.i2c12.write(a,"\x20\x00");
+  //log pressure, altitude, temp to server.log
+  server.log("pressure: " + pressureA + " inHG");
+  server.log("altitude: " + altitude + " ft");
+  local pa = pressureA+"_"+altitude;
+  agent.send("pa",pa);
+  //server.log("temperature: " + temperature + " deg F");
+  //HTU21D added
+  readTandH();
+  
+}
+ 
+
+function start(ledState) {
+//   server.log("Set LED: " + ledState);
+//   led.write(ledState);
+    readPAT();
+    
+}
+agent.on("start", start);
